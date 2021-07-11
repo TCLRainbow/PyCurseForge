@@ -1,6 +1,7 @@
 # PyCurseForge
 
-CurseForge API wrapper using `aiohttp`
+CurseForge API wrapper using `aiohttp`  
+Minimum Python version: `3.6` (f-strings)
 
 [Endpoint documentation](https://twitchappapifork.docs.apiary.io)
 

@@ -1,10 +1,44 @@
+from collections import Iterable
 from datetime import datetime
 from enum import IntEnum
-from typing import Optional, Union
+from typing import Optional, Union, List
 
 
-def iso_8601_to_datetime(date: str, ms: bool = True) -> datetime:
-    return datetime.strptime(date, f'%Y-%m-%dT%H:%M:%S{".%f" if ms else ""}Z')
+def iso_8601_to_datetime(date: str) -> datetime:
+    try:
+        return datetime.strptime(date, f'%Y-%m-%dT%H:%M:%S.%fZ')
+    except ValueError:
+        return datetime.strptime(date, f'%Y-%m-%dT%H:%M:%SZ')
+
+
+class AddonFile:
+
+    def __init__(self, json: dict, serialise_date, cf):
+        self._cf = cf
+        self.id: int = json['id']
+        self.display_name: str = json['displayName']
+        self.file_name: str = json['fileName']
+        if serialise_date:
+            self.uploaded_at: datetime = iso_8601_to_datetime(json['fileDate'])
+            self.released_at: datetime = iso_8601_to_datetime(json['gameVersionDateReleased'])
+        else:
+            self.uploaded_at: str = json['fileDate']
+            self.released_at: str = json['gameVersionReleaseDate']
+        self.size: int = json['fileLength']
+        self.release_type: ReleaseType = ReleaseType(json['releaseType'])
+        self.file_status: FileStatus = FileStatus(json['fileStatus'])
+        self.download_url: str = json['downloadUrl']
+        self.alternate: bool = json['isAlternate']
+        self.alternate_file_id: int = json['alternateFileId']
+        self.dependencies: Iterable[int] = map(lambda d: d['id'], json['dependencies'])
+        self.available: bool = json['isAvailable']
+        self.modules: Iterable[Module] = map(lambda j: Module(j), json['modules'])
+        self.package_fingerprint: str = json['packageFingerprint']
+        self.game_versions: [str] = json['gameVersion']
+        self.install_metadata: Optional[str] = json.get('installMetadata')
+        self.changelog: Optional[str] = json.get('changelog')
+        self.has_install_script: bool = json['hasInstallScript']
+        self.game_version_flavor: Optional[int] = json.get('gameVersionFlavor')
 
 
 class Addon:
@@ -14,20 +48,21 @@ class Addon:
         self._serialise = serialise_date
         self.id: int = json['id']
         self.name: str = json['name']
-        self.authors: map = map(lambda j: Author(j), json['authors'])
-        self.attachments: map = map(lambda j: Attachment(j), json['attachments'])
+        self.authors: Iterable[Author] = map(lambda j: Author(j), json['authors'])
+        self.attachments: Iterable[Attachment] = map(lambda j: Attachment(j), json['attachments'])
         self.website_url: str = json['websiteUrl']
         self.game_id: int = json['gameId']
         self.summary: str = json['summary']
         self.default_file_id: int = json['defaultFileId']
         self.download_count: int = json['downloadCount']
-        self.latest_files: map = map(lambda j: AddonFile(j, serialise_date, cf), json['latestFiles'])
+        self.latest_files: Iterable[AddonFile] = map(lambda j: AddonFile(j, serialise_date, cf), json['latestFiles'])
         self.status: AddonStatus = AddonStatus(json['status'])
         self.primary_category_id: int = json['primaryCategoryId']
-        self.categories: map = map(lambda j: Category(j), json['categories'])
+        self.categories: Iterable[Category] = map(lambda j: Category(j), json['categories'])
         self.category_section: CategorySection = CategorySection(json['categorySection'])
         self.slug: str = json['slug']
-        self.game_version_latest_files: map = map(lambda j: GameVersionLatestFile(j), json['gameVersionLatestFiles'])
+        self.game_version_latest_files: Iterable[GameVersionLatestFile] = map(
+            lambda j: GameVersionLatestFile(j), json['gameVersionLatestFiles'])
         self.featured: bool = json['isFeatured']
         self.popularity: float = json['popularityScore']
         self.game_popularity_rank: int = json['gamePopularityRank']
@@ -46,13 +81,13 @@ class Addon:
         self.available: bool = json['isAvailable']
         self.experimental: bool = json['isExperiemental']  # Lmao this is actually their typo
 
-    async def get_description(self):
+    async def get_description(self) -> str:
         return await self._cf.get_addon_description(self.id)
 
-    async def get_files(self):
+    async def get_files(self) -> Iterable[AddonFile]:
         return await self._cf.get_addon_files(self.id, self._serialise)
 
-    async def get_file(self, file_id):
+    async def get_file(self, file_id) -> AddonFile:
         return await self._cf.get_addon_file(self.id, file_id, self._serialise)
 
 
@@ -61,7 +96,10 @@ class Author:
     def __init__(self, json: dict):
         self.name: str = json['name']
         self.url: str = json['url']
+        self.addon_id: int = json['projectId']
         self.id: int = json['id']
+        self.addon_title_id: dict = json['projectTitleId']
+        self.addon_title_title: dict = json['projectTitleTitle']  # #BestKeyNameEver
         self.user_id: int = json['userId']
         self.twitch_id: int = json['twitchId']
 
@@ -79,58 +117,28 @@ class Attachment:
         self.status: int = json['status']
 
 
-class AddonFile:
+class AddonFileDetails(AddonFile):
 
-    def __init__(self, json: dict, serialise_date, cf):
-        self.id: int = json['id']
-        self.display_name: str = json['displayName']
-        self.file_name: str = json['fileName']
-        if serialise_date:
-            self.uploaded_at: datetime = iso_8601_to_datetime(json['fileDate'])
-            self.released_at: datetime = iso_8601_to_datetime(json['gameVersionDateReleased'], False)
-        else:
-            self.uploaded_at: str = json['fileDate']
-            self.released_at: str = json['gameVersionReleaseDate']
-        self.size: int = json['fileLength']
-        self.release_type: ReleaseType = ReleaseType(json['releaseType'])
-        self.file_status: FileStatus = FileStatus(json['fileStatus'])
-        self.download_url: str = json['downloadUrl']
-        self.alternate: bool = json['isAlternate']
-        self.alternate_file_id: int = json['alternateFileId']
-        self.dependencies: map = map(lambda d: d['id'], json['dependencies'])
-        self.available: bool = json['isAvailable']
-        self.modules: map = map(lambda j: Module(j), json['modules'])
-        self.package_fingerprint: str = json['packageFingerprint']
-        self.game_versions: [str] = json['gameVersion']
-        self.install_metadata: Optional[str] = json.get('installMetadata')
-        self.changelog: Optional[str] = json.get('changelog')
-        self.has_install_script: bool = json['hasInstallScript']
-        self.game_version_flavor: Optional[int] = json.get('gameVersionFlavor')
-
-
-# class AddonFileDetails(AddonFile):
-# """Bruh wtf"""
-#
-#     def __init__(self, json, serialise_date, cf):
-#         super().__init__(json, serialise_date, cf)
-#         self.game_versions: map = map(lambda j: GameVersion(j, serialise_date), json['sortableGameVersion'])
-#         self.compatible_with_client: bool = json['isCompatibleWithClient']
-#         self.category_section_package_type: int = json['categorySectionPackageType']
-#         self.restrict_addon_file_access: int = json['restrictProjectFileAccess']
-#         self.addon_status: AddonStatus = AddonStatus(json['projectStatus'])
-#         self.render_cache_id: int = json['renderCacheId']
-#         self.legacy_mapping_id: Optional[int] = json.get('fileLegacyMappingId')
-#         self.addon_id: int = json['projectId']
-#         self.parent_addon_file_id: Optional[int] = json.get('parentProjectFileId')
-#         self.parent_file_legacy_mapping_id: Optional[int] = json.get('parentFileLegacyMappingId')
-#         self.file_type_id: Optional[int] = json.get('fileTypeId')
-#         self.expose_as_alternative: Optional[float, int] = json.get('exposeAsAlternative')  # Float/Int?
-#         self.package_fingerprint_id: int = json['packageFingerprintId']
-#         self.game_id: int = json['gameId']
-#         self.server_pack: bool = json['isServerPack']
-#         self.server_pack_file_id: Optional[int] = json.get('serverPackFileId')
-#         self.game_version_mapping_id: int = json['gameVersionMappingId']
-#         self.game_version_id: int = json['gameVersionId']
+    def __init__(self, json, serialise_date, cf):
+        super().__init__(json, serialise_date, cf)
+        self.game_versions: map = map(lambda j: GameVersion(j, serialise_date), json['sortableGameVersion'])
+        self.compatible_with_client: bool = json['isCompatibleWithClient']
+        self.category_section_package_type: int = json['categorySectionPackageType']
+        self.restrict_addon_file_access: int = json['restrictProjectFileAccess']
+        self.addon_status: AddonStatus = AddonStatus(json['projectStatus'])
+        self.render_cache_id: int = json['renderCacheId']
+        self.legacy_mapping_id: Optional[int] = json.get('fileLegacyMappingId')
+        self.addon_id: int = json['projectId']
+        self.parent_addon_file_id: Optional[int] = json.get('parentProjectFileId')
+        self.parent_file_legacy_mapping_id: Optional[int] = json.get('parentFileLegacyMappingId')
+        self.file_type_id: Optional[int] = json.get('fileTypeId')
+        self.expose_as_alternative: Optional[float, int] = json.get('exposeAsAlternative')  # Float/Int?
+        self.package_fingerprint_id: int = json['packageFingerprintId']
+        self.game_id: int = json['gameId']
+        self.server_pack: bool = json['isServerPack']
+        self.server_pack_file_id: Optional[int] = json.get('serverPackFileId')
+        self.game_version_mapping_id: int = json['gameVersionMappingId']
+        self.game_version_id: int = json['gameVersionId']
 
 
 class ReleaseType(IntEnum):
@@ -217,10 +225,11 @@ class Game:
             self.modified_at: datetime = iso_8601_to_datetime(json['dateModified'])
         else:
             self.modified_at: str = json['dateModified']
-        self.game_files: map = map(lambda j: GameFile(j), json['gameFiles'])
-        self.game_detection_hints: map = map(lambda j: GameDetectionHint(j), json['gameDetectionHints'])
-        self.file_parsing_rules: map = map(lambda j: FileParsingRule(j), json['fileParsingRules'])
-        self.category_sections: map = map(lambda j: CategorySection(j), json['categorySections'])
+        self.game_files: Iterable[GameFile] = map(lambda j: GameFile(j), json['gameFiles'])
+        self.game_detection_hints: Iterable[GameDetectionHint] = map(
+            lambda j: GameDetectionHint(j), json['gameDetectionHints'])
+        self.file_parsing_rules: Iterable[FileParsingRule] = map(lambda j: FileParsingRule(j), json['fileParsingRules'])
+        self.category_sections: Iterable[CategorySection] = map(lambda j: CategorySection(j), json['categorySections'])
         self.max_free_storage: Union[float, int] = json['maxFreeStorage']  # float / int?
         self.max_premium_storage: Union[float, int] = json['maxPremiumStorage']  # float / int?
         self.max_file_size: Union[float, int] = json['maxFileSize']  # float / int?
@@ -287,3 +296,44 @@ class GameVersion:
             self.released_at: str = json['gameVersionReleaseDate']
         self.version_padded: str = json['gameVersionPadded']
         self.name: str = json['gameVersionName']
+
+
+class FingerprintMatch:
+
+    def __init__(self, json: dict, serialise_date, cf):
+        self.id: int = json['id']
+        self.file: AddonFileDetails = AddonFileDetails(json['file'], serialise_date, cf)
+        self.latest_files: Iterable[AddonFileDetails] = map(
+            lambda j: AddonFileDetails(j, serialise_date, cf), json['latestFiles'])
+
+
+class FingerprintResponse:
+
+    def __init__(self, json: dict, serialise_date, cf):
+        self.cache_built: bool = json['isCacheBuilt']
+        self.exact_matches: Iterable[FingerprintMatch] = map(
+            lambda j: FingerprintMatch(j, serialise_date, cf), json['exactMatches'])
+        self.exact_fingerprints: [int] = json['exactFingerprints']
+        self.partial_matches: Iterable[FingerprintMatch] = map(
+            lambda j: FingerprintMatch(j, serialise_date, cf), json['partialMatches'])
+        self.partial_match_fingerprints: Union[List, {}] = json['partialMatchFingerprints']  # Doc: List, Received Dict
+        self.installed_fingerprints: [int] = json['installedFingerprints']
+        self.unmatched_fingerprints: [int] = json['unmatchedFingerprints']
+
+
+class Minecraft:
+
+    def __init__(self, json: dict, serialise_date, cf):
+        self.id: int = json['id']
+        self.version: str = json['versionString']
+        self.version_id: int = json['gameVersionId']
+        self.jar_download_url: str = json['jarDownloadUrl']
+        self.json_download_url: str = json['jsonDownloadUrl']
+        self.approved: bool = json['approved']
+        if serialise_date:
+            self.modified_at: datetime = iso_8601_to_datetime(json['dateModified'])
+        else:
+            self.modified_at: str = json['dateModified']
+        self.version_type_id: int = json['gameVersionTypeId']
+        self.version_status: int = json['gameVersionStatus']
+        self.version_type_status: int = json['gameVersionTypeStatus']
