@@ -1,3 +1,4 @@
+import json
 from collections import Iterable
 from datetime import datetime
 from enum import IntEnum
@@ -337,3 +338,33 @@ class Minecraft:
         self.version_type_id: int = json['gameVersionTypeId']
         self.version_status: int = json['gameVersionStatus']
         self.version_type_status: int = json['gameVersionTypeStatus']
+
+
+class ModLoader:
+
+    def __init__(self, j: dict, serialise_date, cf):
+        self.id: int = j['id']
+        self.game_version_id: int = j['gameVersionId']
+        self.minecraft_version_id: int = j['minecraftGameVersionId']
+        self.forge_version: str = j['forgeVersion']
+        self.name: str = j['name']
+        self.type: int = j['type']
+        self.download_url: str = j['downloadUrl']
+        self.file_name: str = j['filename']
+        self.install_method: int = j['installMethod']
+        self.latest: bool = j['latest']
+        self.recommended: bool = j['recommended']
+        self.approved: bool = j['approved']
+        if serialise_date:
+            self.modified_at: datetime = iso_8601_to_datetime(j['dateModified'])
+        else:
+            self.modified_at: str = j['dateModified']
+        self.maven_version: str = j['mavenVersionString']
+        self.version_json: dict = json.loads(j['versionJson'])
+        self.libs_install_path: str = j['librariesInstallLocation']
+        self.minecraft_version: str = j['minecraftVersion']
+        if j.get('additionalFilesJson'):
+            self.additional_files_json: dict = json.loads(j['additionalFilesJson'])
+        else:
+            self.additional_files_json = None
+
