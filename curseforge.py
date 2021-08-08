@@ -123,3 +123,10 @@ class CurseForge:
 
     async def get_minecraft_version(self, version_name: str, serialise_date: bool = True) -> objects.Minecraft:
         return await self.__get('minecraft/version/' + version_name, objects.Minecraft, serialise_date)
+
+    async def get_mod_loader_details(self, mod_loader: str, serialise_date: bool = True) -> objects.ModLoaderDetails:
+        return await self.__get('minecraft/modloader/' + mod_loader,
+                                objects.ModLoaderDetails, serialise_date=serialise_date)
+
+    async def get_mod_loaders(self, serialise_date: bool = True) -> Iterable[objects.ModLoader]:
+        return await self.__multi_get('minecraft/modloader', objects.ModLoader, serialise_date=serialise_date)
