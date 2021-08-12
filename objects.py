@@ -59,7 +59,7 @@ class Addon:
         self.latest_files: Iterable[AddonFile] = map(lambda f: AddonFile(f, serialise_date, cf), j['latestFiles'])
         self.status: AddonStatus = AddonStatus(j['status'])
         self.primary_category_id: int = j['primaryCategoryId']
-        self.categories: Iterable[Category] = map(lambda c: Category(c), j['categories'])
+        self.categories: Iterable[GameCategory] = map(lambda c: GameCategory(c), j['categories'])
         self.category_section: CategorySection = CategorySection(j['categorySection'])
         self.slug: str = j['slug']
         self.game_version_latest_files: Iterable[GameVersionLatestFile] = map(
@@ -179,18 +179,38 @@ class AddonStatus(IntEnum):
     UNDER_REVIEW = 10
 
 
-class Category:
+class __BaseCategory:
 
     def __init__(self, j: dict):
-        self.id: int = j['categoryId']
+        self.id: int = j['id']
         self.name: str = j['name']
-        self.url: str = j['url']
         self.avatar_url: str = j['avatarUrl']
         self.parent_id: int = j['parentId']
         self.root_id: int = j['rootId']
+        self.game_id: int = j['gameId']
+
+
+class GameCategory(__BaseCategory):
+
+    def __init__(self, j: dict):
+        j['id'] = j.pop('categoryId')
+        super().__init__(j)
+        self.url: str = j['url']
         self.addon_id: int = j['projectId']
         self.avatar_id: int = j['avatarId']
-        self.game_id: int = j['gameId']
+
+
+class Category(__BaseCategory):
+
+    def __init__(self, j: dict, serialise_date, cf):
+        j['parentId'] = j.pop('parentGameCategoryId')
+        j['rootId'] = j.pop('rootGameCategoryId')
+        super().__init__(j)
+        self.slug: str = j['slug']
+        if serialise_date:
+            self.modified_at: datetime = iso_8601_to_datetime(j['dateModified'])
+        else:
+            self.modified_at: str = j['dateModified']
 
 
 class CategorySection:
@@ -218,7 +238,7 @@ class GameVersionLatestFile:
 
 class Game:
 
-    def __init__(self, j, serialise_date):
+    def __init__(self, j, serialise_date, cf):
         self.id: int = j['id']
         self.name: str = j['name']
         self.slug: str = j['slug']
